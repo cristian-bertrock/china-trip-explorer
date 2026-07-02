@@ -180,6 +180,23 @@
   .filter-clear-btn{ background:none; border:1px solid var(--ink-line); color:var(--ink-muted); border-radius:20px; padding:0.3rem 0.8rem; font-family:var(--font-mono); font-size:0.75rem; }
   .filter-clear-btn:hover{ border-color:var(--seal); color:var(--ink-text); }
 
+  .map-mobile-controls{
+    display:none; position:absolute; right:0.75rem; bottom:0.75rem; flex-direction:column; gap:0.5rem; z-index:5;
+  }
+  .map-zoom-btn{
+    width:36px; height:36px; border-radius:50%; padding:0; display:flex; align-items:center; justify-content:center;
+    background:var(--ink-panel); border:1px solid var(--ink-line); color:var(--ink-text); font-size:1.2rem; line-height:1;
+    box-shadow:0 2px 8px var(--shadow-1);
+  }
+  .map-zoom-btn:hover{ border-color:var(--seal); }
+  .map-select-toggle{
+    display:none; position:absolute; right:0.75rem; top:0.75rem; width:36px; height:36px; border-radius:50%; padding:0;
+    align-items:center; justify-content:center; background:var(--ink-panel); border:1px solid var(--ink-line); color:var(--ink-text);
+    box-shadow:0 2px 8px var(--shadow-1); z-index:5;
+  }
+  .map-select-toggle svg{ width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+  .map-select-toggle.is-active{ border-color:var(--jade); color:var(--jade); }
+
   /* ---------- grid ---------- */
   .grid-section{ padding-block:clamp(2.5rem,5vw,4rem) 8rem; }
   .grid-head{ margin-bottom:1.75rem; }
@@ -325,6 +342,11 @@
     .trip-bar-inner{ gap:0.85rem; }
     .map-head{ flex-direction:column; align-items:flex-start; gap:0.4rem; }
     .map-hint{ text-align:left; }
+    .pin-dot{ r:6; }
+    .pin-hit{ r:20; }
+    .pin-label{ font-size:14px; }
+    .map-mobile-controls{ display:flex; }
+    .map-select-toggle{ display:flex; }
     .sidebar{ width:100vw; }
     .card-body{ padding:1.15rem 1.15rem 1.35rem; }
   }
@@ -515,6 +537,13 @@
 </g>
 <polygon class="draw-lasso" id="draw-lasso" points=""></polygon>
       </svg>
+      <div class="map-mobile-controls">
+        <button class="map-zoom-btn" id="map-zoom-in" type="button" aria-label="Zoom in / Ingrandisci">+</button>
+        <button class="map-zoom-btn" id="map-zoom-out" type="button" aria-label="Zoom out / Riduci">&minus;</button>
+      </div>
+      <button class="map-select-toggle" id="map-select-toggle" type="button" aria-pressed="false" aria-label="Toggle multi-pin selection / Attiva selezione multipla">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12l5 5L20 6"/></svg>
+      </button>
     </div>
     <div class="filter-status" id="filter-status">
       <span id="filter-status-text"></span>

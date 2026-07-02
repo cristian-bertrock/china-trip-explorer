@@ -1409,19 +1409,27 @@
     filterStatusText.textContent = t().showingOf(visible, cardsData().length);
   }
 
-  function applyFilter(){
+  function applyFilterKeys(keySet){
     filterActive = true;
-    var testPoint = svg.createSVGPoint();
     cardsData().forEach(function(card){
-      testPoint.x = parseFloat(card.dataset.x);
-      testPoint.y = parseFloat(card.dataset.y);
-      var inside = drawLasso.isPointInFill(testPoint);
+      var inside = keySet.has(card.dataset.key);
       card.classList.toggle('is-filtered-out', !inside);
       var pinEl = document.querySelector('.pin[data-key="' + card.dataset.key + '"]');
       if (pinEl) pinEl.classList.toggle('is-dimmed', !inside);
     });
     filterStatus.classList.add('is-visible');
     renderFilterStatus();
+  }
+
+  function applyFilter(){
+    var testPoint = svg.createSVGPoint();
+    var keySet = new Set();
+    cardsData().forEach(function(card){
+      testPoint.x = parseFloat(card.dataset.x);
+      testPoint.y = parseFloat(card.dataset.y);
+      if (drawLasso.isPointInFill(testPoint)) keySet.add(card.dataset.key);
+    });
+    applyFilterKeys(keySet);
   }
 
   function clearFilter(){

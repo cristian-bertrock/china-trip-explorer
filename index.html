@@ -1442,13 +1442,51 @@
   }
   document.getElementById('filter-clear').addEventListener('click', clearFilter);
 
+  // ---------- mobile map pan/zoom ----------
+  var mapContent = document.getElementById('map-content');
+  var mapZoom = { scale:1, tx:0, ty:0 };
+  var activePointers = new Map();
+  var panState = null;
+
+  function isMobileMapMode(){
+    return window.matchMedia('(max-width:640px)').matches;
+  }
+
+  function applyMapTransform(){
+    mapContent.setAttribute('transform', 'translate(' + mapZoom.tx + ',' + mapZoom.ty + ') scale(' + mapZoom.scale + ')');
+  }
+
+  function clampPan(){
+    mapZoom.tx = Math.min(0, Math.max(1000 - 1000 * mapZoom.scale, mapZoom.tx));
+    mapZoom.ty = Math.min(0, Math.max(709 - 709 * mapZoom.scale, mapZoom.ty));
+  }
+
   svg.addEventListener('pointerdown', function(e){
     if (e.target.closest('.pin')) return;
+    if (isMobileMapMode()){
+      activePointers.set(e.pointerId, { x:e.clientX, y:e.clientY });
+      svg.setPointerCapture(e.pointerId);
+      if (activePointers.size === 1){
+        panState = { start: svgPoint(e.clientX, e.clientY), tx0: mapZoom.tx, ty0: mapZoom.ty };
+      }
+      return;
+    }
     var p = svgPoint(e.clientX, e.clientY);
     dragState = { points:[p], moved:false };
     svg.setPointerCapture(e.pointerId);
   });
   svg.addEventListener('pointermove', function(e){
+    if (isMobileMapMode() && activePointers.has(e.pointerId)){
+      activePointers.set(e.pointerId, { x:e.clientX, y:e.clientY });
+      if (panState){
+        var mp = svgPoint(e.clientX, e.clientY);
+        mapZoom.tx = panState.tx0 + (mp.x - panState.start.x);
+        mapZoom.ty = panState.ty0 + (mp.y - panState.start.y);
+        clampPan();
+        applyMapTransform();
+      }
+      return;
+    }
     if (!dragState) return;
     var p = svgPoint(e.clientX, e.clientY);
     var pts = dragState.points;
@@ -1463,7 +1501,12 @@
       drawLasso.classList.add('is-active');
     }
   });
-  svg.addEventListener('pointerup', function(){
+  svg.addEventListener('pointerup', function(e){
+    if (isMobileMapMode() && activePointers.has(e.pointerId)){
+      activePointers.delete(e.pointerId);
+      panState = null;
+      return;
+    }
     if (!dragState) return;
     if (dragState.moved && dragState.points.length > 2){
       applyFilter();
@@ -1472,7 +1515,14 @@
     }
     dragState = null;
   });
-  svg.addEventListener('pointercancel', function(){ dragState = null; });
+  svg.addEventListener('pointercancel', function(e){
+    if (isMobileMapMode()){
+      activePointers.delete(e.pointerId);
+      panState = null;
+      return;
+    }
+    dragState = null;
+  });
 
   // ---------- init ----------
   applyLang(currentLang);

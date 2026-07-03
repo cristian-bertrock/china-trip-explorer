@@ -1381,10 +1381,31 @@
     }
   }
 
+  var selectMode = false;
+  var selectedKeys = new Set();
+  var selectToggleBtn = document.getElementById('map-select-toggle');
+  selectToggleBtn.addEventListener('click', function(){
+    selectMode = !selectMode;
+    selectToggleBtn.classList.toggle('is-active', selectMode);
+    selectToggleBtn.setAttribute('aria-pressed', String(selectMode));
+  });
+
+  function togglePinSelection(key){
+    if (selectedKeys.has(key)) selectedKeys.delete(key); else selectedKeys.add(key);
+    applyFilterKeys(selectedKeys);
+  }
+
   document.querySelectorAll('.pin').forEach(function(pin){
-    pin.addEventListener('click', function(){ focusCard(pin.dataset.key); });
+    pin.addEventListener('click', function(){
+      if (selectMode){ togglePinSelection(pin.dataset.key); return; }
+      focusCard(pin.dataset.key);
+    });
     pin.addEventListener('keydown', function(e){
-      if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); focusCard(pin.dataset.key); }
+      if (e.key === 'Enter' || e.key === ' '){
+        e.preventDefault();
+        if (selectMode){ togglePinSelection(pin.dataset.key); return; }
+        focusCard(pin.dataset.key);
+      }
     });
   });
 
@@ -1436,6 +1457,7 @@
     filterActive = false;
     drawLasso.classList.remove('is-active');
     drawLasso.setAttribute('points', '');
+    selectedKeys.clear();
     cardsData().forEach(function(card){ card.classList.remove('is-filtered-out'); });
     document.querySelectorAll('.pin.is-dimmed').forEach(function(p){ p.classList.remove('is-dimmed'); });
     filterStatus.classList.remove('is-visible');

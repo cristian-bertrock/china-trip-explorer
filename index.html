@@ -1462,6 +1462,19 @@
     mapZoom.ty = Math.min(0, Math.max(709 - 709 * mapZoom.scale, mapZoom.ty));
   }
 
+  function stepZoom(factor){
+    var cx = 500, cy = 354.5;
+    var localX = (cx - mapZoom.tx) / mapZoom.scale;
+    var localY = (cy - mapZoom.ty) / mapZoom.scale;
+    mapZoom.scale = Math.min(4, Math.max(1, mapZoom.scale * factor));
+    mapZoom.tx = cx - mapZoom.scale * localX;
+    mapZoom.ty = cy - mapZoom.scale * localY;
+    clampPan();
+    applyMapTransform();
+  }
+  document.getElementById('map-zoom-in').addEventListener('click', function(){ stepZoom(1.4); });
+  document.getElementById('map-zoom-out').addEventListener('click', function(){ stepZoom(1 / 1.4); });
+
   function pointsFrom(map){
     return Array.from(map.values());
   }

@@ -1468,7 +1468,6 @@
   var mapContent = document.getElementById('map-content');
   var mapZoom = { scale:1, tx:0, ty:0 };
   var activePointers = new Map();
-  var panState = null;
   var pinchState = null;
 
   function isMobileMapMode(){
@@ -1501,16 +1500,56 @@
     return Array.from(map.values());
   }
 
+  function extendLasso(clientX, clientY){
+    var p = svgPoint(clientX, clientY);
+    var pts = dragState.points;
+    var last = pts[pts.length - 1];
+    if (Math.hypot(p.x - last.x, p.y - last.y) < MIN_POINT_SPACING) return;
+    pts.push(p);
+    if (!dragState.moved && Math.hypot(p.x - pts[0].x, p.y - pts[0].y) > DRAG_THRESHOLD){
+      dragState.moved = true;
+    }
+    if (dragState.moved){
+      drawLasso.setAttribute('points', pts.map(function(pt){ return pt.x + ',' + pt.y; }).join(' '));
+      drawLasso.classList.add('is-active');
+    }
+  }
+
+  // Lasso points are in root-SVG space (svgPoint ignores #map-content's pan/zoom
+  // transform), so hit-testing must move each pin forward through that same
+  // transform before testing it against the drawn shape.
+  function finishMobileLasso(){
+    if (dragState.moved && dragState.points.length > 2){
+      var testPoint = svg.createSVGPoint();
+      var keySet = new Set();
+      cardsData().forEach(function(card){
+        testPoint.x = mapZoom.tx + mapZoom.scale * parseFloat(card.dataset.x);
+        testPoint.y = mapZoom.ty + mapZoom.scale * parseFloat(card.dataset.y);
+        if (drawLasso.isPointInFill(testPoint)) keySet.add(card.dataset.key);
+      });
+      selectedKeys = keySet;
+      applyFilterKeys(selectedKeys);
+    } else if (filterActive){
+      clearFilter();
+    }
+    dragState = null;
+  }
+
   svg.addEventListener('pointerdown', function(e){
-    if (e.target.closest('.pin')) return;
+    var onPin = !!e.target.closest('.pin');
     if (isMobileMapMode()){
+      // A lone touch starting on a pin is left alone for the pin's own click
+      // handler (tap-to-select / tap-to-focus). Once a second finger is down,
+      // this is a pinch/pan gesture regardless of what either finger is over —
+      // pins cluster tightly enough on mobile that a real two-finger gesture
+      // will often land one finger on a pin.
+      if (onPin && activePointers.size === 0) return;
       activePointers.set(e.pointerId, { x:e.clientX, y:e.clientY });
       svg.setPointerCapture(e.pointerId);
-      if (activePointers.size === 1){
-        panState = { start: svgPoint(e.clientX, e.clientY), tx0: mapZoom.tx, ty0: mapZoom.ty };
-        pinchState = null;
-      } else if (activePointers.size === 2){
-        panState = null;
+      if (activePointers.size === 2){
+        dragState = null;
+        drawLasso.classList.remove('is-active');
+        drawLasso.setAttribute('points', '');
         var pinchPts = pointsFrom(activePointers).map(function(pt){ return svgPoint(pt.x, pt.y); });
         var dist0 = Math.hypot(pinchPts[1].x - pinchPts[0].x, pinchPts[1].y - pinchPts[0].y);
         var mid0 = { x:(pinchPts[0].x + pinchPts[1].x) / 2, y:(pinchPts[0].y + pinchPts[1].y) / 2 };
@@ -1520,9 +1559,12 @@
           localX: (mid0.x - mapZoom.tx) / mapZoom.scale,
           localY: (mid0.y - mapZoom.ty) / mapZoom.scale
         };
+      } else if (activePointers.size === 1 && selectMode){
+        dragState = { points:[svgPoint(e.clientX, e.clientY)], moved:false };
       }
       return;
     }
+    if (onPin) return;
     var p = svgPoint(e.clientX, e.clientY);
     dragState = { points:[p], moved:false };
     svg.setPointerCapture(e.pointerId);
@@ -1539,38 +1581,20 @@
         mapZoom.ty = mid.y - mapZoom.scale * pinchState.localY;
         clampPan();
         applyMapTransform();
-      } else if (panState){
-        var mp = svgPoint(e.clientX, e.clientY);
-        mapZoom.tx = panState.tx0 + (mp.x - panState.start.x);
-        mapZoom.ty = panState.ty0 + (mp.y - panState.start.y);
-        clampPan();
-        applyMapTransform();
+      } else if (dragState){
+        extendLasso(e.clientX, e.clientY);
       }
       return;
     }
     if (!dragState) return;
-    var p = svgPoint(e.clientX, e.clientY);
-    var pts = dragState.points;
-    var last = pts[pts.length - 1];
-    if (Math.hypot(p.x - last.x, p.y - last.y) < MIN_POINT_SPACING) return;
-    pts.push(p);
-    if (!dragState.moved && Math.hypot(p.x - pts[0].x, p.y - pts[0].y) > DRAG_THRESHOLD){
-      dragState.moved = true;
-    }
-    if (dragState.moved){
-      drawLasso.setAttribute('points', pts.map(function(pt){ return pt.x + ',' + pt.y; }).join(' '));
-      drawLasso.classList.add('is-active');
-    }
+    extendLasso(e.clientX, e.clientY);
   });
   svg.addEventListener('pointerup', function(e){
     if (isMobileMapMode() && activePointers.has(e.pointerId)){
       activePointers.delete(e.pointerId);
       pinchState = null;
-      if (activePointers.size === 1){
-        var remaining = pointsFrom(activePointers)[0];
-        panState = { start: svgPoint(remaining.x, remaining.y), tx0: mapZoom.tx, ty0: mapZoom.ty };
-      } else {
-        panState = null;
+      if (activePointers.size === 0 && dragState){
+        finishMobileLasso();
       }
       return;
     }
@@ -1586,7 +1610,9 @@
     if (isMobileMapMode()){
       activePointers.delete(e.pointerId);
       pinchState = null;
-      panState = null;
+      dragState = null;
+      drawLasso.classList.remove('is-active');
+      drawLasso.setAttribute('points', '');
       return;
     }
     dragState = null;
@@ -1603,8 +1629,8 @@
     mapZoom.scale = 1; mapZoom.tx = 0; mapZoom.ty = 0;
     applyMapTransform();
     activePointers.clear();
-    panState = null;
     pinchState = null;
+    dragState = null;
   });
 
   // ---------- init ----------

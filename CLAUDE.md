@@ -26,7 +26,7 @@ python3 -m http.server 8791
    - map jump button (IntersectionObserver + scroll-to-map)
    - pin / card focus (clicking a map pin scrolls to its card, unless mobile select-mode is armed — see **Map filter**)
    - freehand-draw map filter (desktop lasso select — see **Map filter**)
-   - mobile map pan/zoom (touch pan, pinch-zoom, +/- buttons, tap-to-select filter, and the breakpoint-crossing reset — see **Map filter**)
+   - mobile map pan/zoom (two-finger pan/pinch-zoom, +/- buttons, one-finger lasso-select, and the breakpoint-crossing reset — see **Map filter**)
    - favorites sidebar (open/close, star toggle, persisted list)
 
 ## Destination cards
@@ -55,9 +55,11 @@ No library. Every user-facing string exists twice as sibling elements:
 
 Two ways to build a filter, both converging on the shared `applyFilterKeys(keySet)`:
 - **Desktop lasso-drag**: dragging on the map appends pointer-move points to `draw-lasso` (a polygon, not a fixed-radius circle); on release, hit-testing uses the native `SVGGeometryElement.isPointInFill()` against each card's `data-x`/`data-y` — no hand-rolled point-in-polygon math, don't add one.
-- **Mobile tap-select**: below 640px width (`isMobileMapMode()`), `#map-select-toggle` arms `selectMode`; tapping pins then toggles membership in a `selectedKeys` Set instead of scrolling to the card.
+- **Mobile lasso-drag**: below 640px width (`isMobileMapMode()`), `#map-select-toggle` arms `selectMode`; with it on, a one-finger drag draws the same `draw-lasso` polygon via the shared `extendLasso()` helper, and a plain one-finger tap on a pin toggles it individually via `togglePinSelection()` instead of scrolling to the card. With `selectMode` off, one-finger drag is a no-op and tap falls back to the normal scroll-to-card behavior.
 
-Mobile also gets pan (single-finger drag) and pinch/button zoom (`#map-zoom-in`/`#map-zoom-out`) on `#map-content`, tracked via `activePointers`/`panState`/`pinchState` and applied as a `translate(...) scale(...)` transform (`mapZoom` state + `applyMapTransform()`). When the viewport crosses back above 640px, a `matchMedia('(max-width:640px)')` change listener resets `selectMode`, the zoom/pan transform, and pointer tracking state — but leaves `selectedKeys`/`filterActive` alone, so an active filter selection survives the breakpoint change.
+Because `draw-lasso` is drawn in root-SVG space (untouched by `#map-content`'s pan/zoom transform) but pins live inside that transformed group, `finishMobileLasso()`'s hit-test can't reuse desktop's raw `data-x`/`data-y` — it has to move each pin forward through the current `mapZoom` transform first (`mapZoom.tx + mapZoom.scale * dataX`) before testing it against the lasso.
+
+Mobile pan/zoom is two-finger only: a single active pointer never pans (that gesture is reserved for lasso-drawing above); once a second pointer goes down, `#map-content` gets a `translate(...) scale(...)` transform (`mapZoom` state + `applyMapTransform()`) driven by the two touches' midpoint (pan) and distance-ratio (pinch-zoom via `#map-zoom-in`/`#map-zoom-out` buttons or a real pinch), tracked via `activePointers`/`pinchState`. A touch starting on a pin is normally left alone for the pin's own click handler, *unless* a second pointer is already down — pins cluster tightly enough on mobile that a real two-finger gesture will often land one finger on one, so that check only applies to a lone first touch. When the viewport crosses back above 640px, a `matchMedia('(max-width:640px)')` change listener resets `selectMode`, the zoom/pan transform, and pointer/drag tracking state — but leaves `selectedKeys`/`filterActive` alone, so an active filter selection survives the breakpoint change.
 
 ## Theme tokens
 

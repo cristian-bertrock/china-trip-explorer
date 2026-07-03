@@ -1447,6 +1447,7 @@
   var mapZoom = { scale:1, tx:0, ty:0 };
   var activePointers = new Map();
   var panState = null;
+  var pinchState = null;
 
   function isMobileMapMode(){
     return window.matchMedia('(max-width:640px)').matches;
@@ -1461,6 +1462,10 @@
     mapZoom.ty = Math.min(0, Math.max(709 - 709 * mapZoom.scale, mapZoom.ty));
   }
 
+  function pointsFrom(map){
+    return Array.from(map.values());
+  }
+
   svg.addEventListener('pointerdown', function(e){
     if (e.target.closest('.pin')) return;
     if (isMobileMapMode()){
@@ -1468,6 +1473,18 @@
       svg.setPointerCapture(e.pointerId);
       if (activePointers.size === 1){
         panState = { start: svgPoint(e.clientX, e.clientY), tx0: mapZoom.tx, ty0: mapZoom.ty };
+        pinchState = null;
+      } else if (activePointers.size === 2){
+        panState = null;
+        var pinchPts = pointsFrom(activePointers).map(function(pt){ return svgPoint(pt.x, pt.y); });
+        var dist0 = Math.hypot(pinchPts[1].x - pinchPts[0].x, pinchPts[1].y - pinchPts[0].y);
+        var mid0 = { x:(pinchPts[0].x + pinchPts[1].x) / 2, y:(pinchPts[0].y + pinchPts[1].y) / 2 };
+        pinchState = {
+          dist0: dist0,
+          s0: mapZoom.scale,
+          localX: (mid0.x - mapZoom.tx) / mapZoom.scale,
+          localY: (mid0.y - mapZoom.ty) / mapZoom.scale
+        };
       }
       return;
     }
@@ -1478,7 +1495,16 @@
   svg.addEventListener('pointermove', function(e){
     if (isMobileMapMode() && activePointers.has(e.pointerId)){
       activePointers.set(e.pointerId, { x:e.clientX, y:e.clientY });
-      if (panState){
+      if (pinchState && activePointers.size >= 2){
+        var pinchPts = pointsFrom(activePointers).slice(0, 2).map(function(pt){ return svgPoint(pt.x, pt.y); });
+        var dist = Math.hypot(pinchPts[1].x - pinchPts[0].x, pinchPts[1].y - pinchPts[0].y);
+        var mid = { x:(pinchPts[0].x + pinchPts[1].x) / 2, y:(pinchPts[0].y + pinchPts[1].y) / 2 };
+        mapZoom.scale = Math.min(4, Math.max(1, pinchState.s0 * (dist / pinchState.dist0)));
+        mapZoom.tx = mid.x - mapZoom.scale * pinchState.localX;
+        mapZoom.ty = mid.y - mapZoom.scale * pinchState.localY;
+        clampPan();
+        applyMapTransform();
+      } else if (panState){
         var mp = svgPoint(e.clientX, e.clientY);
         mapZoom.tx = panState.tx0 + (mp.x - panState.start.x);
         mapZoom.ty = panState.ty0 + (mp.y - panState.start.y);
@@ -1504,7 +1530,13 @@
   svg.addEventListener('pointerup', function(e){
     if (isMobileMapMode() && activePointers.has(e.pointerId)){
       activePointers.delete(e.pointerId);
-      panState = null;
+      pinchState = null;
+      if (activePointers.size === 1){
+        var remaining = pointsFrom(activePointers)[0];
+        panState = { start: svgPoint(remaining.x, remaining.y), tx0: mapZoom.tx, ty0: mapZoom.ty };
+      } else {
+        panState = null;
+      }
       return;
     }
     if (!dragState) return;
@@ -1518,6 +1550,7 @@
   svg.addEventListener('pointercancel', function(e){
     if (isMobileMapMode()){
       activePointers.delete(e.pointerId);
+      pinchState = null;
       panState = null;
       return;
     }

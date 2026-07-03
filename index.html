@@ -1397,13 +1397,13 @@
 
   document.querySelectorAll('.pin').forEach(function(pin){
     pin.addEventListener('click', function(){
-      if (selectMode){ togglePinSelection(pin.dataset.key); return; }
+      if (isMobileMapMode() && selectMode){ togglePinSelection(pin.dataset.key); return; }
       focusCard(pin.dataset.key);
     });
     pin.addEventListener('keydown', function(e){
       if (e.key === 'Enter' || e.key === ' '){
         e.preventDefault();
-        if (selectMode){ togglePinSelection(pin.dataset.key); return; }
+        if (isMobileMapMode() && selectMode){ togglePinSelection(pin.dataset.key); return; }
         focusCard(pin.dataset.key);
       }
     });
@@ -1590,6 +1590,21 @@
       return;
     }
     dragState = null;
+  });
+
+  // reset mobile-only interaction state when the viewport crosses back to desktop
+  // (selectedKeys / filterActive are left alone — an active filter selection survives)
+  var mobileMQ = window.matchMedia('(max-width:640px)');
+  mobileMQ.addEventListener('change', function(e){
+    if (e.matches) return;
+    selectMode = false;
+    selectToggleBtn.classList.remove('is-active');
+    selectToggleBtn.setAttribute('aria-pressed', 'false');
+    mapZoom.scale = 1; mapZoom.tx = 0; mapZoom.ty = 0;
+    applyMapTransform();
+    activePointers.clear();
+    panState = null;
+    pinchState = null;
   });
 
   // ---------- init ----------
